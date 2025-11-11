@@ -8,7 +8,10 @@ Ses Dosyası Transkript Uygulaması
 import argparse
 import os
 import sys
+import tempfile
+import time
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Python 3.13+ için audioop workaround
 try:
@@ -17,7 +20,88 @@ except ImportError:
     # audioop modülü Python 3.13'te kaldırıldı
     # pydub için mock modül oluştur
     import types
+    
+    def _audioop_passthrough(fragment, width):
+        """Basit passthrough fonksiyonu - veriyi olduğu gibi döndürür"""
+        return fragment
+    
+    def _audioop_mul(fragment, width, factor):
+        """Ses seviyesini çarpar - basit implementasyon"""
+        return fragment
+    
+    def _audioop_add(fragment1, fragment2, width):
+        """İki ses parçasını toplar - basit implementasyon"""
+        return fragment1
+    
+    def _audioop_tomono(fragment, width, lfactor, rfactor):
+        """Stereo'dan mono'ya dönüştürür"""
+        return fragment
+    
+    def _audioop_tostereo(fragment, width, lfactor, rfactor):
+        """Mono'dan stereo'ya dönüştürür"""
+        return fragment + fragment
+    
+    def _audioop_bias(fragment, width, bias):
+        """Bias ekler"""
+        return fragment
+    
+    def _audioop_reverse(fragment, width):
+        """Ses parçasını ters çevirir"""
+        return fragment[::-1]
+    
+    def _audioop_byteswap(fragment, width):
+        """Byte sırasını değiştirir"""
+        return fragment
+    
+    def _audioop_lin2lin(fragment, width, newwidth):
+        """Farklı genişlikler arasında dönüştürür"""
+        return fragment
+    
+    def _audioop_ratecv(fragment, width, nchannels, inrate, outrate, state, weightA, weightB):
+        """Örnekleme hızını değiştirir"""
+        return fragment, state
+    
+    def _audioop_lin2ulaw(fragment, width):
+        """Linear'dan u-law'a dönüştürür"""
+        return fragment
+    
+    def _audioop_ulaw2lin(fragment, width):
+        """u-law'dan linear'a dönüştürür"""
+        return fragment
+    
+    def _audioop_lin2alaw(fragment, width):
+        """Linear'dan A-law'a dönüştürür"""
+        return fragment
+    
+    def _audioop_alaw2lin(fragment, width):
+        """A-law'dan linear'a dönüştürür"""
+        return fragment
+    
+    def _audioop_lin2adpcm(fragment, width, state):
+        """Linear'dan ADPCM'e dönüştürür"""
+        return fragment, state
+    
+    def _audioop_adpcm2lin(fragment, width, state):
+        """ADPCM'den linear'a dönüştürür"""
+        return fragment, state
+    
+    # Mock modülü oluştur
     audioop = types.ModuleType('audioop')
+    audioop.mul = _audioop_mul
+    audioop.add = _audioop_add
+    audioop.tomono = _audioop_tomono
+    audioop.tostereo = _audioop_tostereo
+    audioop.bias = _audioop_bias
+    audioop.reverse = _audioop_reverse
+    audioop.byteswap = _audioop_byteswap
+    audioop.lin2lin = _audioop_lin2lin
+    audioop.ratecv = _audioop_ratecv
+    audioop.lin2ulaw = _audioop_lin2ulaw
+    audioop.ulaw2lin = _audioop_ulaw2lin
+    audioop.lin2alaw = _audioop_lin2alaw
+    audioop.alaw2lin = _audioop_alaw2lin
+    audioop.lin2adpcm = _audioop_lin2adpcm
+    audioop.adpcm2lin = _audioop_adpcm2lin
     sys.modules['audioop'] = audioop
 
 try:
@@ -98,14 +182,162 @@ def convert_audio_to_wav(input_path: str, output_path: str = None) -> str:
         sys.exit(1)
 
 
-def transcribe_audio(audio_path: str, api_key: str = None) -> str:
+def get_chunk_size_mb(chunk_path: str) -> float:
+    """
+    Parça dosyasının boyutunu MB cinsinden döndürür.
+    
+    Args:
+        chunk_path: Parça dosyası yolu
+    
+    Returns:
+        Dosya boyutu (MB)
+    """
+    try:
+        size_bytes = os.path.getsize(chunk_path)
+        return size_bytes / (1024 * 1024)
+    except:
+        return 0
+
+
+def split_audio_file(audio_path: str, chunk_length_minutes: int = 5, max_size_mb: float = 20.0) -> list:
+    """
+    Büyük ses dosyasını parçalara böler.
+    Parça boyutu 25MB limitini aşmaması için dinamik olarak ayarlanır.
+    
+    Args:
+        audio_path: Ses dosyası yolu
+        chunk_length_minutes: Her parçanın uzunluğu (dakika cinsinden)
+        max_size_mb: Maksimum parça boyutu (MB, varsayılan: 20MB, limit: 25MB)
+    
+    Returns:
+        Parça dosya yollarının listesi
+    """
+    try:
+        audio = pydub.AudioSegment.from_file(audio_path)
+        chunk_length_ms = chunk_length_minutes * 60 * 1000  # Dakikayı milisaniyeye çevir
+        total_length_ms = len(audio)
+        
+        # Eğer dosya parçalara bölünmeyecek kadar kısaysa, direkt döndür
+        if total_length_ms <= chunk_length_ms:
+            # Tek dosya için boyut kontrolü yap
+            file_size_mb = get_chunk_size_mb(audio_path)
+            if file_size_mb > max_size_mb:
+                print(f"UYARI: Dosya boyutu ({file_size_mb:.2f}MB) limiti aşıyor. Parçalara bölünüyor...")
+            else:
+                return [audio_path]
+        
+        chunks = []
+        temp_dir = tempfile.gettempdir()
+        base_name = Path(audio_path).stem
+        
+        # Dosyayı parçalara böl
+        start = 0
+        chunk_index = 0
+        current_chunk_length_ms = chunk_length_ms
+        
+        while start < total_length_ms:
+            end = min(start + current_chunk_length_ms, total_length_ms)
+            chunk = audio[start:end]
+            
+            # Geçici dosya oluştur
+            chunk_path = os.path.join(temp_dir, f"{base_name}_chunk_{chunk_index:03d}.wav")
+            chunk.export(chunk_path, format="wav")
+            
+            # Parça boyutunu kontrol et
+            chunk_size_mb = get_chunk_size_mb(chunk_path)
+            
+            # Eğer parça çok büyükse, boyutu küçült ve tekrar dene
+            if chunk_size_mb > max_size_mb:
+                os.remove(chunk_path)  # Büyük parçayı sil
+                
+                # Parça uzunluğunu yarıya indir
+                current_chunk_length_ms = int(current_chunk_length_ms * 0.5)
+                if current_chunk_length_ms < 30000:  # 30 saniyeden az olmasın
+                    current_chunk_length_ms = 30000
+                
+                print(f"UYARI: Parça {chunk_index+1} çok büyük ({chunk_size_mb:.2f}MB). Parça uzunluğu {current_chunk_length_ms/60000:.1f} dakikaya düşürülüyor...")
+                continue  # Aynı başlangıç noktasından tekrar dene
+            
+            chunks.append(chunk_path)
+            start = end
+            chunk_index += 1
+            
+            # Başarılı parça oluşturulduktan sonra varsayılan uzunluğa geri dön
+            if current_chunk_length_ms < chunk_length_ms:
+                current_chunk_length_ms = chunk_length_ms
+        
+        return chunks
+    except Exception as e:
+        print(f"HATA: Ses dosyası parçalara bölünürken hata oluştu: {e}")
+        sys.exit(1)
+
+
+def transcribe_chunk(chunk_path: str, chunk_index: int, total_chunks: int, api_key: str, max_retries: int = 3) -> tuple:
+    """
+    Tek bir parçayı transkript eder (paralel işleme için).
+    Retry mekanizması ile bağlantı hatalarını yönetir.
+    
+    Args:
+        chunk_path: Parça dosyası yolu
+        chunk_index: Parça indeksi (0-based)
+        total_chunks: Toplam parça sayısı
+        api_key: OpenAI API anahtarı
+        max_retries: Maksimum deneme sayısı (varsayılan: 3)
+    
+    Returns:
+        (chunk_index, transcript_text) tuple
+    """
+    client = OpenAI(api_key=api_key)
+    
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                wait_time = min(2 ** attempt, 10)  # Exponential backoff, max 10 saniye
+                print(f"Parça {chunk_index+1}/{total_chunks} tekrar deneniyor (deneme {attempt+1}/{max_retries})...")
+                time.sleep(wait_time)
+            else:
+                print(f"Parça {chunk_index+1}/{total_chunks} işleniyor...")
+            
+            with open(chunk_path, "rb") as audio_file:
+                transcript = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file
+                )
+            print(f"Parça {chunk_index+1}/{total_chunks} tamamlandı.")
+            return (chunk_index, transcript.text)
+        except Exception as e:
+            error_str = str(e)
+            # 413 hatası (dosya çok büyük) için retry yapma
+            if "413" in error_str or "Maximum content size" in error_str:
+                print(f"HATA: Parça {chunk_index+1} çok büyük (25MB limiti aşıldı). Bu parça atlanıyor.")
+                return (chunk_index, f"[Parça {chunk_index+1} çok büyük, işlenemedi]")
+            
+            # Son denemede hata döndür
+            if attempt == max_retries - 1:
+                print(f"HATA: Parça {chunk_index+1} {max_retries} denemeden sonra işlenemedi: {e}")
+                return (chunk_index, f"[Parça {chunk_index+1} işlenemedi: {str(e)}]")
+            
+            # Connection error için retry yap
+            if "Connection" in error_str or "timeout" in error_str.lower():
+                continue  # Retry yap
+    
+    # Buraya gelmemeli ama yine de güvenlik için
+    return (chunk_index, f"[Parça {chunk_index+1} işlenemedi]")
+
+
+def transcribe_audio(audio_path: str, api_key: str = None, chunk_length_minutes: int = 5, max_workers: int = None, max_chunk_size_mb: float = 20.0) -> str:
     """
     Ses dosyasını OpenAI Whisper API kullanarak metne çevirir.
+    Büyük dosyalar otomatik olarak parçalara bölünür ve birleştirilir.
     Dil otomatik olarak algılanır ve ses dosyasındaki dilde transkript edilir.
+    Parçalar paralel olarak işlenir, bu da işlem süresini önemli ölçüde kısaltır.
     
     Args:
         audio_path: Ses dosyası yolu
         api_key: OpenAI API anahtarı (opsiyonel, ortam değişkeninden alınabilir)
+        chunk_length_minutes: Parça uzunluğu (dakika cinsinden, varsayılan: 5)
+        max_workers: Paralel işlem sayısı (varsayılan: 3, connection error'ları önlemek için)
+        max_chunk_size_mb: Maksimum parça boyutu (MB, varsayılan: 20MB)
     
     Returns:
         Transkript edilmiş metin (ses dosyasındaki dilde)
@@ -119,17 +351,62 @@ def transcribe_audio(audio_path: str, api_key: str = None) -> str:
         print("Lütfen OPENAI_API_KEY ortam değişkenini ayarlayın veya --api-key parametresini kullanın.")
         sys.exit(1)
     
-    client = OpenAI(api_key=api_key)
-    
     try:
-        print(f"Ses dosyası işleniyor: {audio_path}")
-        with open(audio_path, "rb") as audio_file:
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file
-                # language parametresi belirtilmediği için Whisper otomatik dil algılama yapacak
-            )
-        return transcript.text
+        # Ses dosyasının süresini kontrol et
+        audio = pydub.AudioSegment.from_file(audio_path)
+        duration_minutes = len(audio) / (60 * 1000)
+        
+        print(f"Ses dosyası süresi: {duration_minutes:.2f} dakika")
+        
+        # Dosyayı parçalara böl (gerekirse)
+        chunks = split_audio_file(audio_path, chunk_length_minutes, max_chunk_size_mb)
+        
+        if len(chunks) > 1:
+            print(f"Dosya {len(chunks)} parçaya bölündü (her parça ~{chunk_length_minutes} dakika, max {max_chunk_size_mb}MB)")
+            # Paralel işlem sayısını sınırla (connection error'ları önlemek için)
+            if max_workers is None:
+                max_workers = min(3, len(chunks))  # Varsayılan olarak max 3 paralel işlem
+            print(f"Parçalar paralel olarak işlenecek (max {max_workers} eşzamanlı işlem)...")
+        else:
+            max_workers = 1
+        
+        # Geçici dosyaları takip et
+        temp_chunk_files = [chunk for chunk in chunks if chunk != audio_path]
+        
+        # Paralel işleme için ThreadPoolExecutor kullan
+        all_transcripts = [None] * len(chunks)  # Sonuçları doğru sırada saklamak için
+        
+        if len(chunks) == 1:
+            # Tek parça varsa normal işle
+            result = transcribe_chunk(chunks[0], 0, 1, api_key)
+            all_transcripts[0] = result[1]
+        else:
+            # Birden fazla parça varsa paralel işle
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Tüm parçaları işleme gönder
+                future_to_chunk = {
+                    executor.submit(transcribe_chunk, chunk_path, i, len(chunks), api_key): (i, chunk_path)
+                    for i, chunk_path in enumerate(chunks)
+                }
+                
+                # Tamamlanan işlemleri topla
+                for future in as_completed(future_to_chunk):
+                    chunk_index, transcript_text = future.result()
+                    all_transcripts[chunk_index] = transcript_text
+        
+        # Parçaları birleştir
+        final_transcript = " ".join(all_transcripts)
+        
+        # Geçici parça dosyalarını temizle
+        for chunk_file in temp_chunk_files:
+            try:
+                if os.path.exists(chunk_file):
+                    os.remove(chunk_file)
+            except:
+                pass
+        
+        return final_transcript
+        
     except Exception as e:
         print(f"HATA: Transkript işlemi sırasında hata oluştu: {e}")
         sys.exit(1)
@@ -199,6 +476,27 @@ def main():
         help="Sadece konsola yazdır, dosyaya kaydetme"
     )
     
+    parser.add_argument(
+        "--chunk-length",
+        type=int,
+        default=5,
+        help="Büyük dosyalar için parça uzunluğu (dakika cinsinden, varsayılan: 5)"
+    )
+    
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=None,
+        help="Paralel işlem sayısı (varsayılan: 3, connection error'ları önlemek için)"
+    )
+    
+    parser.add_argument(
+        "--max-chunk-size",
+        type=float,
+        default=20.0,
+        help="Maksimum parça boyutu (MB, varsayılan: 20MB, limit: 25MB)"
+    )
+    
     args = parser.parse_args()
     
     # Giriş dosyasını belirle: önce komut satırı, yoksa kullanıcıdan sor
@@ -237,7 +535,7 @@ def main():
     
     try:
         # Transkript işlemi
-        transcript = transcribe_audio(audio_path, args.api_key)
+        transcript = transcribe_audio(audio_path, args.api_key, args.chunk_length, args.max_workers, args.max_chunk_size)
         
         # Sonuçları göster
         print("\n" + "="*50)
