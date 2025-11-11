@@ -16,8 +16,12 @@ pip install -r requirements.txt
    - **macOS**: `brew install ffmpeg`
    - **Linux**: `sudo apt-get install ffmpeg` (Ubuntu/Debian) veya `sudo yum install ffmpeg` (CentOS/RHEL)
 
-4. OpenAI API anahtarınızı ayarlayın:
-   - Ortam değişkeni olarak: `set OPENAI_API_KEY=your_api_key_here` (Windows) veya `export OPENAI_API_KEY=your_api_key_here` (Linux/macOS)
+4. OpenAI API anahtarınızı ayarlayın (otomatik yükleme için):
+   - Proje kök dizininde `.env` dosyası oluşturun ve içine şunu yazın:
+     ```
+     OPENAI_API_KEY=your_api_key_here
+     ```
+   - Veya ortam değişkeni olarak: `set OPENAI_API_KEY=your_api_key_here` (Windows) veya `export OPENAI_API_KEY=your_api_key_here` (Linux/macOS)
    - Veya komut satırında `--api-key` parametresi ile
 
 ## Kullanım

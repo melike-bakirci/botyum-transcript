@@ -1,0 +1,26 @@
+# API anahtarları ve hassas bilgiler
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Geçici dosyalar
+*.wav
+*_transkript.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
