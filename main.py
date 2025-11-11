@@ -101,13 +101,14 @@ def convert_audio_to_wav(input_path: str, output_path: str = None) -> str:
 def transcribe_audio(audio_path: str, api_key: str = None) -> str:
     """
     Ses dosyasını OpenAI Whisper API kullanarak metne çevirir.
+    Dil otomatik olarak algılanır ve ses dosyasındaki dilde transkript edilir.
     
     Args:
         audio_path: Ses dosyası yolu
         api_key: OpenAI API anahtarı (opsiyonel, ortam değişkeninden alınabilir)
     
     Returns:
-        Transkript edilmiş metin
+        Transkript edilmiş metin (ses dosyasındaki dilde)
     """
     # API anahtarını kontrol et
     if api_key is None:
@@ -125,8 +126,8 @@ def transcribe_audio(audio_path: str, api_key: str = None) -> str:
         with open(audio_path, "rb") as audio_file:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
-                file=audio_file,
-                language="tr"  # Türkçe için
+                file=audio_file
+                # language parametresi belirtilmediği için Whisper otomatik dil algılama yapacak
             )
         return transcript.text
     except Exception as e:
