@@ -154,11 +154,7 @@ def save_transcript(text: str, output_path: str):
 # ============================================
 # DOSYA YOLU AYARLARI
 # ============================================
-# Eğer komut satırından dosya yolu belirtmek istemiyorsanız,
-# aşağıdaki değişkene ses dosyanızın yolunu yazabilirsiniz.
-# Örnek: SES_DOSYASI_YOLU = "ses_dosyam.mp3"
-# Örnek: SES_DOSYASI_YOLU = "C:\\Users\\botyum\\Desktop\\ses.mp3"
-SES_DOSYASI_YOLU = "C:\\Users\\botyum\\Desktop\\sesen.opus"  # None bırakırsanız komut satırından dosya yolu beklenir
+# Dosya yolu artık konsoldan kullanıcıdan alınacaktır.
 # ============================================
 
 
@@ -204,16 +200,17 @@ def main():
     
     args = parser.parse_args()
     
-    # Giriş dosyasını belirle: önce komut satırı, sonra kod içindeki değişken
+    # Giriş dosyasını belirle: önce komut satırı, yoksa kullanıcıdan sor
     input_file = args.input_file
     if input_file is None:
-        if SES_DOSYASI_YOLU is not None:
-            input_file = SES_DOSYASI_YOLU
-            print(f"Kod içinde belirtilen dosya yolu kullanılıyor: {input_file}")
-        else:
-            print("HATA: Ses dosyası yolu belirtilmedi.")
+        print("Ses dosyasının yolunu girin:")
+        input_file = input().strip()
+        
+        # Kullanıcı boş girdi verirse hata ver
+        if not input_file:
+            print("HATA: Ses dosyası yolu boş olamaz.")
             print("Kullanım: python main.py dosya.mp3")
-            print("Veya main.py dosyasındaki SES_DOSYASI_YOLU değişkenine dosya yolunu yazın.")
+            print("Veya komut çalıştırıldığında dosya yolunu girin.")
             sys.exit(1)
     
     # Giriş dosyasını kontrol et
