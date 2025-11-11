@@ -246,13 +246,43 @@ def main():
         print(transcript)
         print("="*50 + "\n")
         
-        # Dosyaya kaydet (eğer --no-save kullanılmadıysa)
-        if not args.no_save:
-            if args.output:
-                output_path = args.output
+        # Dosyaya kaydetme işlemi
+        # Eğer --no-save parametresi kullanıldıysa kaydetme
+        if args.no_save:
+            print("Transkript kaydedilmedi (--no-save parametresi kullanıldı).")
+        else:
+            # Kullanıcıya kaydetmek isteyip istemediğini sor
+            print("Transkripti dosyaya kaydetmek istiyor musunuz? (E/H): ", end="")
+            kaydet_cevap = input().strip().upper()
+            
+            if kaydet_cevap in ['E', 'EVET', 'Y', 'YES']:
+                # Eğer --output parametresi verildiyse onu kullan
+                if args.output:
+                    output_path = args.output
+                else:
+                    # Kullanıcıdan dosya yolunu sor
+                    print("Dosya yolunu girin (örnek: C:\\Users\\botyum\\Desktop): ", end="")
+                    dosya_yolu = input().strip()
+                    
+                    # Boş girilirse varsayılan olarak mevcut dizine kaydet
+                    if not dosya_yolu:
+                        dosya_yolu = str(Path.cwd())
+                    
+                    # Dosya yolunu Path objesine çevir
+                    yol_path = Path(dosya_yolu)
+                    
+                    # Eğer yol bir klasör ise, dosya adını otomatik oluştur
+                    if yol_path.is_dir() or not yol_path.suffix:
+                        # Klasör yoluna dosya adını ekle
+                        dosya_adi = input_path.stem + "_transkript.txt"
+                        output_path = str(yol_path / dosya_adi)
+                    else:
+                        # Tam dosya yolu verilmiş
+                        output_path = dosya_yolu
+                
+                save_transcript(transcript, output_path)
             else:
-                output_path = str(input_path.with_suffix('')) + "_transkript.txt"
-            save_transcript(transcript, output_path)
+                print("Transkript kaydedilmedi.")
     
     finally:
         # Geçici WAV dosyasını temizle
