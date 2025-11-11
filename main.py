@@ -158,7 +158,7 @@ def save_transcript(text: str, output_path: str):
 # aşağıdaki değişkene ses dosyanızın yolunu yazabilirsiniz.
 # Örnek: SES_DOSYASI_YOLU = "ses_dosyam.mp3"
 # Örnek: SES_DOSYASI_YOLU = "C:\\Users\\botyum\\Desktop\\ses.mp3"
-SES_DOSYASI_YOLU = "C:\\Users\\botyum\\Desktop\\ses.opus"  # None bırakırsanız komut satırından dosya yolu beklenir
+SES_DOSYASI_YOLU = "C:\\Users\\botyum\\Desktop\\sesen.opus"  # None bırakırsanız komut satırından dosya yolu beklenir
 # ============================================
 
 
