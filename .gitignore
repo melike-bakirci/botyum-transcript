@@ -1,7 +1,8 @@
-# API anahtarları ve hassas bilgiler
+# API Keys and Sensitive Data
 .env
 .env.bak
 *.env
+!.env.example
 
 # Python
 __pycache__/
@@ -10,21 +11,67 @@ __pycache__/
 *.so
 .Python
 build/
+develop-eggs/
 dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# Ortamlar (Environments)
+# Environments
+.env
+.venv
 env/
 venv/
 ENV/
-.venv/
 env.bak/
 venv.bak/
 
-# Test ve Kapsam
+# Project-specific Audio/Video files (Input/Processing)
+*.mp3
+*.opus
+*.wav
+*.m4a
+*.flac
+*.ogg
+*.mp4
+*.webm
+*.mkv
+*.avi
+
+# yt-dlp / ffmpeg temporary files
+*.part
+*.ytdl
+*.temp
+audio_*_*.mp3
+audio_*_*.wav
+*_chunk_*.wav
+
+# Transcripts and Outputs
+*_transkript.txt
+*_transcript.txt
+transkript.txt
+transcript.txt
+outputs/
+output/
+out/
+temp/
+
+# Logs
+*.log
+logs/
+
+# Testing and Coverage
 .tox/
 .nox/
 .coverage
@@ -34,8 +81,10 @@ nosetests.xml
 coverage.xml
 *.cover
 .pytest_cache/
+.hypothesis/
+.pytest_cache/
 
-# IDE'ler
+# IDEs and Editors
 .vscode/
 .idea/
 *.swp
@@ -43,14 +92,13 @@ coverage.xml
 .project
 .pydevproject
 .settings/
+*.sublime-project
+*.sublime-workspace
 
-# İşletim Sistemi
+# Operating System Files
 Thumbs.db
 Desktop.ini
 .DS_Store
-
-# Projeye özel geçici dosyalar
-*.wav
-*_transkript.txt
-temp/
-out/
+ehthumbs.db
+Icon?
+[Bb]humas
