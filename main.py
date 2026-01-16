@@ -520,15 +520,15 @@ def main():
         sys.exit(1)
     
     # Dosya uzantısını kontrol et
-    if input_path.suffix.lower() not in ['.opus', '.mp3', '.wav', '.m4a', '.flac']:
-        print(f"UYARI: Desteklenen formatlar: .opus, .mp3, .wav, .m4a, .flac")
+    if input_path.suffix.lower() not in ['.opus', '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.mp4']:
+        print(f"UYARI: Desteklenen formatlar: .opus, .mp3, .wav, .m4a, .flac, .ogg, .mp4")
         print(f"Yüklenen dosya: {input_path.suffix}")
     
     # Geçici WAV dosyası oluştur (gerekirse)
     audio_path = str(input_path)
     temp_wav = None
     
-    if input_path.suffix.lower() in ['.opus', '.mp3', '.m4a', '.flac']:
+    if input_path.suffix.lower() in ['.opus', '.mp3', '.m4a', '.flac', '.ogg', '.mp4']:
         print("Ses dosyası WAV formatına dönüştürülüyor...")
         temp_wav = convert_audio_to_wav(audio_path)
         audio_path = temp_wav
