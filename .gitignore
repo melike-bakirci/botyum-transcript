@@ -1,5 +1,7 @@
 # API anahtarları ve hassas bilgiler
 .env
+.env.bak
+*.env
 
 # Python
 __pycache__/
@@ -7,20 +9,48 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
-venv/
-ENV/
 build/
 dist/
 *.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Geçici dosyalar
-*.wav
-*_transkript.txt
+# Ortamlar (Environments)
+env/
+venv/
+ENV/
+.venv/
+env.bak/
+venv.bak/
 
-# IDE
+# Test ve Kapsam
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.pytest_cache/
+
+# IDE'ler
 .vscode/
 .idea/
 *.swp
 *.swo
+.project
+.pydevproject
+.settings/
 
+# İşletim Sistemi
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Projeye özel geçici dosyalar
+*.wav
+*_transkript.txt
+temp/
+out/
