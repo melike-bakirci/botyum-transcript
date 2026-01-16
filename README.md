@@ -1,6 +1,6 @@
-# Ses Dosyası Transkript Uygulaması
+# Ses Dosyası ve Video URL Transkript Uygulaması
 
-Bu konsol uygulaması, .opus ve .mp3 formatındaki ses dosyalarını metne (transkript) çevirir. OpenAI Whisper API kullanılarak geliştirilmiştir.
+Bu konsol uygulaması, .opus ve .mp3 formatındaki ses dosyalarını veya YouTube, TikTok gibi platformlardan video URL'lerini metne (transkript) çevirir. OpenAI Whisper API kullanılarak geliştirilmiştir.
 
 ## Kurulum
 
@@ -26,16 +26,32 @@ pip install -r requirements.txt
 
 ## Kullanım
 
-### Temel Kullanım
+### Temel Kullanım (Ses Dosyası)
 
 ```bash
 python main.py dosya.mp3
+```
+
+### Video URL ile Kullanım
+
+```bash
+# YouTube
+python main.py https://youtu.be/VIDEO_ID
+python main.py https://www.youtube.com/watch?v=VIDEO_ID
+
+# TikTok
+python main.py https://www.tiktok.com/@kullanici/video/123456789
+
+# Diğer desteklenen platformlar
+python main.py https://www.instagram.com/reel/VIDEO_ID
+python main.py https://vimeo.com/VIDEO_ID
 ```
 
 ### Çıkış Dosyası Belirtme
 
 ```bash
 python main.py dosya.opus --output transkript.txt
+python main.py https://youtu.be/VIDEO_ID --output transkript.txt
 ```
 
 ### API Anahtarı ile
@@ -52,21 +68,39 @@ python main.py dosya.mp3 --no-save
 
 ## Desteklenen Formatlar
 
+### Ses Dosyaları
 - .mp3
 - .opus
 - .wav
 - .m4a
 - .flac
+- .ogg
+- .mp4
+
+### Video Platformları
+- YouTube (youtube.com, youtu.be)
+- TikTok
+- Instagram
+- Facebook
+- Twitter/X
+- Vimeo
+- Dailymotion
+- Ve yt-dlp tarafından desteklenen diğer platformlar
 
 ## Özellikler
 
 - Otomatik ses formatı dönüştürme (WAV formatına)
-- Türkçe dil desteği
+- **Video URL desteği** (YouTube, TikTok vb.)
+- Otomatik dil algılama
 - Konsol çıktısı ve dosyaya kaydetme seçenekleri
+- Büyük dosyalar için otomatik parçalama
+- Paralel transkript işleme
 - Geçici dosyaların otomatik temizlenmesi
 
 ## Notlar
 
 - OpenAI API kullanımı ücretlidir. Kullanım maliyetleri için [OpenAI Fiyatlandırma](https://openai.com/pricing) sayfasını kontrol edin.
 - Büyük ses dosyaları için işlem süresi uzayabilir.
+- Video indirme için FFmpeg gereklidir.
+- yt-dlp kütüphanesi video indirme için kullanılır ve düzenli olarak güncellenmesi önerilir: `pip install -U yt-dlp`
 

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Ses Dosyası Transkript Uygulaması
-.opus ve .mp3 formatındaki ses dosyalarını metne çevirir.
+Ses Dosyası ve Video URL Transkript Uygulaması
+.opus ve .mp3 formatındaki ses dosyalarını veya YouTube/TikTok gibi platformlardan
+video URL'lerini metne çevirir.
 """
 
 import argparse
 import os
+import re
 import sys
 import tempfile
 import time
@@ -157,6 +159,201 @@ try:
 except (UnicodeDecodeError, FileNotFoundError):
     # Hata durumunda güvenli yükleme fonksiyonunu kullan
     load_env_safe()
+
+# yt-dlp kütüphanesini opsiyonel olarak yükle
+try:
+    import yt_dlp
+    YT_DLP_AVAILABLE = True
+except ImportError:
+    YT_DLP_AVAILABLE = False
+    print("UYARI: yt-dlp kütüphanesi yüklü değil. URL desteği devre dışı.")
+    print("Yüklemek için: pip install yt-dlp")
+
+
+def is_url(input_string: str) -> bool:
+    """
+    Verilen string'in bir URL olup olmadığını kontrol eder.
+    
+    Args:
+        input_string: Kontrol edilecek string
+    
+    Returns:
+        URL ise True, değilse False
+    """
+    # URL pattern'leri
+    url_patterns = [
+        r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+        r'https?://youtu\.be/[\w-]+',
+        r'https?://(?:www\.)?tiktok\.com/@[\w.-]+/video/\d+',
+        r'https?://(?:www\.)?instagram\.com/(?:p|reel)/[\w-]+',
+        r'https?://(?:www\.)?facebook\.com/[\w.-]+/videos/\d+',
+        r'https?://(?:www\.)?twitter\.com/[\w]+/status/\d+',
+        r'https?://(?:www\.)?x\.com/[\w]+/status/\d+',
+        r'https?://(?:www\.)?vimeo\.com/\d+',
+        r'https?://(?:www\.)?dailymotion\.com/video/[\w]+',
+        r'https?://[\w.-]+\.[\w]{2,}(?:/[\w./?%&=-]*)?',  # Genel URL pattern
+    ]
+    
+    input_string = input_string.strip()
+    
+    for pattern in url_patterns:
+        if re.match(pattern, input_string, re.IGNORECASE):
+            return True
+    
+    # Basit URL kontrolü
+    if input_string.startswith(('http://', 'https://')):
+        return True
+    
+    return False
+
+
+def get_platform_name(url: str) -> str:
+    """
+    URL'den platform adını çıkarır.
+    
+    Args:
+        url: Video URL'si
+    
+    Returns:
+        Platform adı (örn. 'YouTube', 'TikTok')
+    """
+    url_lower = url.lower()
+    
+    if 'youtube.com' in url_lower or 'youtu.be' in url_lower:
+        return 'YouTube'
+    elif 'tiktok.com' in url_lower:
+        return 'TikTok'
+    elif 'instagram.com' in url_lower:
+        return 'Instagram'
+    elif 'facebook.com' in url_lower:
+        return 'Facebook'
+    elif 'twitter.com' in url_lower or 'x.com' in url_lower:
+        return 'Twitter/X'
+    elif 'vimeo.com' in url_lower:
+        return 'Vimeo'
+    elif 'dailymotion.com' in url_lower:
+        return 'Dailymotion'
+    else:
+        return 'Video'
+
+
+def download_audio_from_url(url: str, output_dir: str = None) -> tuple:
+    """
+    Verilen URL'den sesi indirir.
+    
+    Args:
+        url: Video URL'si
+        output_dir: İndirme dizini (opsiyonel, varsayılan: temp dizin)
+    
+    Returns:
+        (audio_path, video_title) tuple
+    """
+    if not YT_DLP_AVAILABLE:
+        print("HATA: yt-dlp kütüphanesi yüklü değil.")
+        print("Yüklemek için: pip install yt-dlp")
+        sys.exit(1)
+    
+    if output_dir is None:
+        output_dir = tempfile.gettempdir()
+    
+    platform = get_platform_name(url)
+    print(f"{platform} videosundan ses indiriliyor...")
+    
+    # İndirmeden önce temp dizinindeki mevcut dosyaları listele
+    existing_files = set(os.listdir(output_dir)) if os.path.exists(output_dir) else set()
+    
+    # Benzersiz bir ID oluştur (dosya adı çakışmalarını önlemek için)
+    unique_id = str(int(time.time() * 1000))
+    
+    # yt-dlp ayarları
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': os.path.join(output_dir, f'audio_{unique_id}_%(id)s.%(ext)s'),
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': False,
+        'verbose': False,
+        'ignoreerrors': False,
+        'noprogress': True,
+        'logger': None,  # Tüm log mesajlarını devre dışı bırak
+    }
+    
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Video bilgilerini al ve indir
+            info = ydl.extract_info(url, download=True)
+            
+            video_title = info.get('title', 'video')
+            video_id = info.get('id', 'unknown')
+            
+            # İndirilen dosyayı bul - yt-dlp'den dönen bilgiyi kullan
+            expected_filename = f"audio_{unique_id}_{video_id}.mp3"
+            audio_path = os.path.join(output_dir, expected_filename)
+            
+            # Dosya var mı kontrol et
+            if os.path.exists(audio_path):
+                print(f"Ses dosyası indirildi: {video_title}")
+                return audio_path, video_title
+            
+            # Yoksa temp dizininde yeni eklenen dosyaları bul
+            current_files = set(os.listdir(output_dir))
+            new_files = current_files - existing_files
+            
+            # Yeni dosyalar arasından ses dosyasını bul
+            audio_extensions = ['.mp3', '.m4a', '.webm', '.opus', '.wav', '.ogg']
+            for new_file in new_files:
+                file_lower = new_file.lower()
+                if any(file_lower.endswith(ext) for ext in audio_extensions):
+                    if unique_id in new_file or video_id in new_file:
+                        audio_path = os.path.join(output_dir, new_file)
+                        if os.path.exists(audio_path):
+                            print(f"Ses dosyası indirildi: {video_title}")
+                            return audio_path, video_title
+            
+            # Hala bulunamadıysa, glob ile ara
+            import glob
+            patterns = [
+                os.path.join(output_dir, f"audio_{unique_id}_*.*"),
+                os.path.join(output_dir, f"*{video_id}*.mp3"),
+                os.path.join(output_dir, f"*{video_id}*.m4a"),
+            ]
+            
+            for pattern in patterns:
+                matches = glob.glob(pattern)
+                if matches:
+                    audio_path = matches[0]
+                    if os.path.exists(audio_path):
+                        print(f"Ses dosyası indirildi: {video_title}")
+                        return audio_path, video_title
+            
+            # Son çare: dizindeki en son oluşturulan ses dosyasını bul
+            all_audio_files = []
+            for ext in audio_extensions:
+                all_audio_files.extend(glob.glob(os.path.join(output_dir, f"*{ext}")))
+            
+            if all_audio_files:
+                # En son değiştirilen dosyayı bul
+                latest_file = max(all_audio_files, key=os.path.getmtime)
+                # Son 10 saniye içinde oluşturulmuş mu kontrol et
+                if time.time() - os.path.getmtime(latest_file) < 10:
+                    print(f"Ses dosyası indirildi: {video_title}")
+                    return latest_file, video_title
+            
+            print(f"HATA: İndirilen dosya bulunamadı.")
+            print(f"Beklenen yol: {audio_path}")
+            print(f"Yeni dosyalar: {new_files}")
+            sys.exit(1)
+                
+    except Exception as e:
+        print(f"HATA: Video indirilirken hata oluştu: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 def convert_audio_to_wav(input_path: str, output_path: str = None) -> str:
@@ -438,12 +635,14 @@ def save_transcript(text: str, output_path: str):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Ses dosyalarını (.opus, .mp3) metne çevirir",
+        description="Ses dosyalarını (.opus, .mp3) veya video URL'lerini metne çevirir",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Örnekler:
   python main.py dosya.mp3
   python main.py dosya.opus --output transkript.txt
+  python main.py https://youtu.be/VIDEO_ID
+  python main.py https://www.tiktok.com/@user/video/123456
   python main.py dosya.mp3 --api-key YOUR_API_KEY
         """
     )
@@ -453,7 +652,7 @@ def main():
         type=str,
         nargs='?',  # Opsiyonel hale getir
         default=None,
-        help="Transkript edilecek ses dosyası (.opus veya .mp3)"
+        help="Transkript edilecek ses dosyası (.opus veya .mp3) veya video URL'si"
     )
     
     parser.add_argument(
@@ -502,27 +701,43 @@ def main():
     # Giriş dosyasını belirle: önce komut satırı, yoksa kullanıcıdan sor
     input_file = args.input_file
     if input_file is None:
-        print("Ses dosyasının yolunu girin:")
+        print("Ses dosyasının yolunu veya video URL'sini girin:")
+        print("(Örnek: C:\\Videos\\dosya.mp3 veya https://youtu.be/VIDEO_ID)")
         input_file = input().strip()
         
         # Kullanıcı boş girdi verirse hata ver
         if not input_file:
-            print("HATA: Ses dosyası yolu boş olamaz.")
+            print("HATA: Ses dosyası yolu veya URL boş olamaz.")
             print("Kullanım: python main.py dosya.mp3")
-            print("Veya komut çalıştırıldığında dosya yolunu girin.")
+            print("          python main.py https://youtu.be/VIDEO_ID")
+            print("Veya komut çalıştırıldığında dosya yolunu/URL'yi girin.")
             sys.exit(1)
     
-    # Giriş dosyasını kontrol et
-    input_path = Path(input_file)
-    if not input_path.exists():
-        print(f"HATA: Dosya bulunamadı: {input_file}")
-        print(f"Lütfen dosya yolunun doğru olduğundan emin olun.")
-        sys.exit(1)
+    # URL mi yoksa dosya yolu mu kontrol et
+    is_url_input = is_url(input_file)
     
-    # Dosya uzantısını kontrol et
-    if input_path.suffix.lower() not in ['.opus', '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.mp4']:
-        print(f"UYARI: Desteklenen formatlar: .opus, .mp3, .wav, .m4a, .flac, .ogg, .mp4")
-        print(f"Yüklenen dosya: {input_path.suffix}")
+    # URL'den indirilen dosyayı takip etmek için
+    downloaded_audio_path = None
+    video_title = None
+    
+    if is_url_input:
+        # URL'den ses indir
+        platform = get_platform_name(input_file)
+        print(f"\n{platform} URL'si algılandı!")
+        downloaded_audio_path, video_title = download_audio_from_url(input_file)
+        input_path = Path(downloaded_audio_path)
+    else:
+        # Giriş dosyasını kontrol et
+        input_path = Path(input_file)
+        if not input_path.exists():
+            print(f"HATA: Dosya bulunamadı: {input_file}")
+            print(f"Lütfen dosya yolunun doğru olduğundan emin olun.")
+            sys.exit(1)
+        
+        # Dosya uzantısını kontrol et
+        if input_path.suffix.lower() not in ['.opus', '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.mp4']:
+            print(f"UYARI: Desteklenen formatlar: .opus, .mp3, .wav, .m4a, .flac, .ogg, .mp4")
+            print(f"Yüklenen dosya: {input_path.suffix}")
     
     # Geçici WAV dosyası oluştur (gerekirse)
     audio_path = str(input_path)
@@ -539,7 +754,10 @@ def main():
         
         # Sonuçları göster
         print("\n" + "="*50)
-        print("TRANSKRİPT:")
+        if video_title:
+            print(f"TRANSKRİPT: {video_title}")
+        else:
+            print("TRANSKRİPT:")
         print("="*50)
         print(transcript)
         print("="*50 + "\n")
@@ -572,7 +790,12 @@ def main():
                     # Eğer yol bir klasör ise, dosya adını otomatik oluştur
                     if yol_path.is_dir() or not yol_path.suffix:
                         # Klasör yoluna dosya adını ekle
-                        dosya_adi = input_path.stem + "_transkript.txt"
+                        if video_title:
+                            # Video başlığından güvenli dosya adı oluştur
+                            safe_title = re.sub(r'[<>:"/\\|?*]', '_', video_title)
+                            dosya_adi = safe_title + "_transkript.txt"
+                        else:
+                            dosya_adi = input_path.stem + "_transkript.txt"
                         output_path = str(yol_path / dosya_adi)
                     else:
                         # Tam dosya yolu verilmiş
@@ -588,6 +811,14 @@ def main():
             try:
                 os.remove(temp_wav)
                 print(f"Geçici dosya temizlendi: {temp_wav}")
+            except:
+                pass
+        
+        # İndirilen ses dosyasını temizle
+        if downloaded_audio_path and os.path.exists(downloaded_audio_path):
+            try:
+                os.remove(downloaded_audio_path)
+                print(f"İndirilen ses dosyası temizlendi.")
             except:
                 pass
 
