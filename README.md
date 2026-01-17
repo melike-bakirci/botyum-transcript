@@ -340,6 +340,9 @@ Detaylar için [LICENSE](LICENSE) dosyasına bakın.
 5. Pull Request açın
 
 ---
+## ⚠️ Yasal Bilgilendirme
+
+> "Bu proje, **Prodyum Teknoloji LTD.** şirketi bünyesinde çalıştığım süre içerisinde geliştirdiğim bir çalışmadır. Şirketin onayı ve rızası dahilinde portfolyo ve açık kaynak paylaşımı amacıyla yayınlanmıştır. Ticari amaçla kullanımı, kopyalanması veya ticari bir ürüne entegre edilmesi için şirket ile iletişime geçilmesi gerekmektedir."
 
 ## 📞 İletişim
 
